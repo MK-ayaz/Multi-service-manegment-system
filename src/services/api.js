@@ -2,19 +2,9 @@
 // Today it delegates to the local mock DB; later these can call real APIs.
 import db from './mock/db';
 
-export const authService = {
-  login: (creds) => db.login(creds),
-  logout: () => db.logout(),
-  switchTenant: (id) => db.switchTenant(id),
-  getSession: () => db.getSession(),
-  listTenants: () => db.listTenants(),
-};
-
 export const storeService = {
-  list: () => db.listStores(),
-  create: (d) => db.createStore(d),
-  update: (id, d) => db.updateStore(id, d),
-  remove: (id) => db.deleteStore(id),
+  get: () => db.getStore(),
+  update: (d) => db.updateStore(d),
 };
 
 export const productService = {
@@ -25,9 +15,10 @@ export const productService = {
 };
 
 export const inventoryService = {
-  list: (storeId) => db.listInventory(storeId),
+  list: () => db.listInventory(),
   upsert: (d) => db.upsertInventory(d),
-  remove: (storeId, productId) => db.removeInventory(storeId, productId),
+  adjust: (productId, delta, reason) => db.adjustStock(productId, delta, reason),
+  remove: (productId) => db.removeInventory(productId),
 };
 
 export const customerService = {
@@ -35,6 +26,13 @@ export const customerService = {
   create: (d) => db.createCustomer(d),
   update: (id, d) => db.updateCustomer(id, d),
   remove: (id) => db.deleteCustomer(id),
+};
+
+export const supplierService = {
+  list: () => db.listSuppliers(),
+  create: (d) => db.createSupplier(d),
+  update: (id, d) => db.updateSupplier(id, d),
+  remove: (id) => db.deleteSupplier(id),
 };
 
 export const saleService = {

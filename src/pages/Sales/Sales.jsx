@@ -5,22 +5,22 @@ import {
   TableContainer, TableHead, TableRow, Paper, FormControl, InputLabel, Select, Alert, Tabs, Tab,
 } from '@mui/material';
 import { Add as AddIcon, Remove as RemoveIcon, ShoppingCart as CartIcon, Receipt as ReceiptIcon, Delete as DeleteIcon } from '@mui/icons-material';
-import { storeService, productService, customerService, saleService } from '../../services/api';
+import { productService, customerService, saleService } from '../../services/api';
 
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
   { value: 'card', label: 'Credit/Debit Card' },
   { value: 'transfer', label: 'Bank Transfer' },
 ];
+const fmt = (n) => `$${Number(n || 0).toFixed(2)}`;
 
 export default function Sales() {
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [stores, setStores] = useState([]);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [selectedStore, setSelectedStore] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [cart, setCart] = useState([]);
   const [sales, setSales] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -28,46 +28,34 @@ export default function Sales() {
   const loadInitial = async () => {
     setLoading(true);
     try {
-      const [s, p, c] = await Promise.all([storeService.list(), productService.list(), customerService.list()]);
-      setStores(s); setProducts(p); setCustomers(c);
-      if (s[0]) setSelectedStore(s[0].id);
+      const [p, c] = await Promise.all([productService.list(), customerService.list()]);
+      setProducts(p); setCustomers(c);
     } catch (e) { setError(e.message); } finally { setLoading(false); }
   };
   useEffect(() => { loadInitial(); }, []);
 
-  const loadSales = async () => {
-    if (!selectedStore) return;
-    try { setSales(await saleService.list({ storeId: selectedStore })); } catch (e) { setError(e.message); }
-  };
-  useEffect(() => { loadSales(); }, [selectedStore]);
+  const loadSales = async () => { try { setSales(await saleService.list()); } catch (e) { setError(e.message); } };
+  useEffect(() => { loadSales(); }, []);
 
   const addToCart = (product) => {
     setCart((prev) => {
-      const existing = prev.find((i) => i.productId === product.id);
-      if (existing) {
-        return prev.map((i) => i.productId === product.id
-          ? { ...i, quantity: i.quantity + 1, totalPrice: (i.quantity + 1) * i.unitPrice }
-          : i);
-      }
+      const ex = prev.find((i) => i.productId === product.id);
+      if (ex) return prev.map((i) => i.productId === product.id ? { ...i, quantity: i.quantity + 1, totalPrice: (i.quantity + 1) * i.unitPrice } : i);
       return [...prev, { productId: product.id, productName: product.name, quantity: 1, unitPrice: product.unitPrice, totalPrice: product.unitPrice }];
     });
   };
-  const updateQty = (productId, change) => {
-    setCart((prev) => prev.map((i) => i.productId === productId
-      ? { ...i, quantity: Math.max(0, i.quantity + change), totalPrice: Math.max(0, i.quantity + change) * i.unitPrice }
-      : i).filter((i) => i.quantity > 0));
-  };
-  const removeFromCart = (productId) => setCart((prev) => prev.filter((i) => i.productId !== productId));
-  const total = cart.reduce((sum, i) => sum + i.totalPrice, 0);
+  const updateQty = (id, change) => setCart((prev) => prev.map((i) => i.productId === id
+    ? { ...i, quantity: Math.max(0, i.quantity + change), totalPrice: Math.max(0, i.quantity + change) * i.unitPrice } : i).filter((i) => i.quantity > 0));
+  const removeFromCart = (id) => setCart((prev) => prev.filter((i) => i.productId !== id));
+  const total = cart.reduce((s, i) => s + i.totalPrice, 0);
 
   const checkout = async () => {
     if (!cart.length) { setError('Cart is empty'); return; }
     try {
-      await saleService.create({ storeId: selectedStore, items: cart, totalAmount: total, paymentMethod });
-      setCart([]); setPaymentMethod('cash'); await loadSales();
+      await saleService.create({ items: cart, totalAmount: total, paymentMethod, customerId: selectedCustomer?.id });
+      setCart([]); setSelectedCustomer(null); setPaymentMethod('cash'); await loadSales();
     } catch (e) { setError(e.message); }
   };
-
   const voidSale = async (id) => {
     if (!window.confirm('Void this sale?')) return;
     try { await saleService.void(id); await loadSales(); } catch (e) { setError(e.message); }
@@ -84,12 +72,6 @@ export default function Sales() {
         </Tabs>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-      <FormControl sx={{ minWidth: 220, mb: 2 }}>
-        <InputLabel>Select Store</InputLabel>
-        <Select label="Select Store" value={selectedStore} onChange={(e) => { setSelectedStore(e.target.value); setCart([]); }}>
-          {stores.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
-        </Select>
-      </FormControl>
 
       {activeTab === 0 ? (
         <Grid container spacing={3}>
@@ -102,7 +84,7 @@ export default function Sales() {
                     <Card>
                       <CardContent>
                         <Typography variant="h6">{p.name}</Typography>
-                        <Typography color="text.secondary">${Number(p.unitPrice).toFixed(2)}</Typography>
+                        <Typography color="text.secondary">{fmt(p.unitPrice)}</Typography>
                         <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => addToCart(p)} sx={{ mt: 1 }}>Add</Button>
                       </CardContent>
                     </Card>
@@ -114,6 +96,13 @@ export default function Sales() {
           <Grid item xs={12} md={4}>
             <Paper sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>Cart</Typography>
+              <FormControl fullWidth margin="normal" size="small">
+                <InputLabel>Customer (optional)</InputLabel>
+                <Select label="Customer (optional)" value={selectedCustomer?.id || ''} onChange={(e) => setSelectedCustomer(customers.find((c) => c.id === e.target.value) || null)}>
+                  <MenuItem value=""><em>Walk-in</em></MenuItem>
+                  {customers.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                </Select>
+              </FormControl>
               {cart.map((i) => (
                 <Box key={i.productId} sx={{ mb: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -125,16 +114,16 @@ export default function Sales() {
                       <IconButton size="small" color="error" onClick={() => removeFromCart(i.productId)}><DeleteIcon fontSize="small" /></IconButton>
                     </Box>
                   </Box>
-                  <Typography variant="body2" color="text.secondary">${Number(i.totalPrice).toFixed(2)}</Typography>
+                  <Typography variant="body2" color="text.secondary">{fmt(i.totalPrice)}</Typography>
                 </Box>
               ))}
-              <FormControl fullWidth margin="normal">
+              <FormControl fullWidth margin="normal" size="small">
                 <InputLabel>Payment Method</InputLabel>
                 <Select label="Payment Method" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
                   {PAYMENT_METHODS.map((m) => <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>)}
                 </Select>
               </FormControl>
-              <Typography variant="h6" sx={{ mt: 2 }}>Total: ${total.toFixed(2)}</Typography>
+              <Typography variant="h6" sx={{ mt: 2 }}>Total: {fmt(total)}</Typography>
               <Button variant="contained" fullWidth startIcon={<CartIcon />} sx={{ mt: 1 }} onClick={checkout} disabled={!cart.length}>Checkout</Button>
             </Paper>
           </Grid>
@@ -157,12 +146,10 @@ export default function Sales() {
                 <TableRow key={s.id}>
                   <TableCell>{new Date(s.createdAt).toLocaleString()}</TableCell>
                   <TableCell>{s.items?.length || 0}</TableCell>
-                  <TableCell align="right">${Number(s.totalAmount).toFixed(2)}</TableCell>
+                  <TableCell align="right">{fmt(s.totalAmount)}</TableCell>
                   <TableCell>{PAYMENT_METHODS.find((m) => m.value === s.paymentMethod)?.label}</TableCell>
                   <TableCell>{s.status}</TableCell>
-                  <TableCell align="right">
-                    <IconButton size="small" onClick={() => voidSale(s.id)} disabled={s.status === 'voided'}><ReceiptIcon /></IconButton>
-                  </TableCell>
+                  <TableCell align="right"><IconButton size="small" onClick={() => voidSale(s.id)} disabled={s.status === 'voided'}><ReceiptIcon /></IconButton></TableCell>
                 </TableRow>
               ))}
             </TableBody>
