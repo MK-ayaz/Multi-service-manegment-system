@@ -1,25 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Typography,
-  Grid,
-  IconButton,
-  MenuItem,
-  CircularProgress,
+  Box, Button, Card, CardContent, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, Typography, Grid, IconButton, MenuItem, CircularProgress, Alert,
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-} from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { storeService } from '../../services/api';
 
 const STORE_TYPES = [
   { value: 'pharmacy', label: 'Pharmacy' },
@@ -27,143 +12,64 @@ const STORE_TYPES = [
   { value: 'supermarket', label: 'Supermarket' },
 ];
 
-const Stores = () => {
+export default function Stores() {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editingStore, setEditingStore] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    type: '',
-    location: '',
-  });
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({ name: '', type: '', location: '' });
 
-  const fetchStores = async () => {
+  const load = async () => {
+    setLoading(true);
+    try { setStores(await storeService.list()); } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const openDialog = (store = null) => {
+    setEditing(store);
+    setForm(store ? { name: store.name, type: store.type, location: store.location } : { name: '', type: '', location: '' });
+    setOpen(true);
+  };
+  const close = () => { setOpen(false); setEditing(null); setForm({ name: '', type: '', location: '' }); };
+
+  const submit = async () => {
     try {
-      const storesList = await window.api.stores.getAll();
-      setStores(storesList);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching stores:', error);
-      setLoading(false);
-    }
+      if (editing) await storeService.update(editing.id, form);
+      else await storeService.create(form);
+      close(); await load();
+    } catch (e) { setError(e.message); }
   };
 
-  useEffect(() => {
-    fetchStores();
-  }, []);
-
-  const handleOpenDialog = (store = null) => {
-    if (store) {
-      setEditingStore(store);
-      setFormData({
-        name: store.name,
-        type: store.type,
-        location: store.location,
-      });
-    } else {
-      setEditingStore(null);
-      setFormData({
-        name: '',
-        type: '',
-        location: '',
-      });
-    }
-    setOpenDialog(true);
+  const remove = async (id) => {
+    if (!window.confirm('Delete this store?')) return;
+    try { await storeService.remove(id); await load(); } catch (e) { setError(e.message); }
   };
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setEditingStore(null);
-    setFormData({
-      name: '',
-      type: '',
-      location: '',
-    });
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleSubmit = async () => {
-    try {
-      if (editingStore) {
-        // Update existing store
-        await window.api.stores.update(editingStore.id, formData);
-      } else {
-        // Create new store
-        await window.api.stores.create(formData);
-      }
-      handleCloseDialog();
-      fetchStores();
-    } catch (error) {
-      console.error('Error saving store:', error);
-    }
-  };
-
-  const handleDeleteStore = async (storeId) => {
-    if (window.confirm('Are you sure you want to delete this store?')) {
-      try {
-        await window.api.stores.delete(storeId);
-        fetchStores();
-      } catch (error) {
-        console.error('Error deleting store:', error);
-      }
-    }
-  };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}><CircularProgress /></Box>;
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4">
-          Stores
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Add Store
-        </Button>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h4">Stores</Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openDialog()}>Add Store</Button>
       </Box>
-
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
       <Grid container spacing={3}>
-        {stores.map((store) => (
-          <Grid item xs={12} sm={6} md={4} key={store.id}>
+        {stores.map((s) => (
+          <Grid item xs={12} sm={6} md={4} key={s.id}>
             <Card>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Box>
-                    <Typography variant="h6" gutterBottom>
-                      {store.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Type: {store.type}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Location: {store.location}
-                    </Typography>
+                    <Typography variant="h6">{s.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">Type: {s.type}</Typography>
+                    <Typography variant="body2" color="text.secondary">Location: {s.location}</Typography>
                   </Box>
                   <Box>
-                    <IconButton onClick={() => handleOpenDialog(store)} size="small">
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton onClick={() => handleDeleteStore(store.id)} size="small" color="error">
-                      <DeleteIcon />
-                    </IconButton>
+                    <IconButton onClick={() => openDialog(s)} size="small"><EditIcon /></IconButton>
+                    <IconButton onClick={() => remove(s.id)} size="small" color="error"><DeleteIcon /></IconButton>
                   </Box>
                 </Box>
               </CardContent>
@@ -171,55 +77,20 @@ const Stores = () => {
           </Grid>
         ))}
       </Grid>
-
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingStore ? 'Edit Store' : 'Add New Store'}
-        </DialogTitle>
+      <Dialog open={open} onClose={close} maxWidth="sm" fullWidth>
+        <DialogTitle>{editing ? 'Edit Store' : 'Add New Store'}</DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 2 }}>
-            <TextField
-              fullWidth
-              label="Store Name"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              margin="normal"
-            />
-            <TextField
-              fullWidth
-              select
-              label="Store Type"
-              name="type"
-              value={formData.type}
-              onChange={handleInputChange}
-              margin="normal"
-            >
-              {STORE_TYPES.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              fullWidth
-              label="Location"
-              name="location"
-              value={formData.location}
-              onChange={handleInputChange}
-              margin="normal"
-            />
-          </Box>
+          <TextField fullWidth margin="normal" label="Store Name" name="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <TextField fullWidth select margin="normal" label="Store Type" name="type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+            {STORE_TYPES.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+          </TextField>
+          <TextField fullWidth margin="normal" label="Location" name="location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained">
-            {editingStore ? 'Update' : 'Create'}
-          </Button>
+          <Button onClick={close}>Cancel</Button>
+          <Button onClick={submit} variant="contained">{editing ? 'Update' : 'Create'}</Button>
         </DialogActions>
       </Dialog>
     </Box>
   );
-};
-
-export default Stores; 
+}

@@ -1,264 +1,116 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  Button,
-  Card,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Typography,
-  IconButton,
-  MenuItem,
-  CircularProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  FormControl,
-  InputLabel,
-  Select,
-  Alert,
+  Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography,
+  IconButton, MenuItem, CircularProgress, Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Paper, FormControl, InputLabel, Select, Alert, Stack,
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Warning as WarningIcon,
-} from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Warning as WarningIcon } from '@mui/icons-material';
+import { storeService, productService, inventoryService } from '../../services/api';
 
-const Inventory = () => {
+export default function Inventory() {
   const [loading, setLoading] = useState(true);
   const [stores, setStores] = useState([]);
+  const [products, setProducts] = useState([]);
   const [selectedStore, setSelectedStore] = useState('');
   const [inventory, setInventory] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [openDialog, setOpenDialog] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [formData, setFormData] = useState({
-    productId: '',
-    quantity: '',
-    minQuantity: '',
-    maxQuantity: '',
-  });
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
+  const [form, setForm] = useState({ productId: '', quantity: '', minQuantity: '', maxQuantity: '' });
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const storesList = await window.api.stores.getAll();
-        setStores(storesList);
-        
-        if (storesList.length > 0) {
-          setSelectedStore(storesList[0].id);
-        }
-        
-        const productsList = await window.api.products.getAll();
-        setProducts(productsList);
-        
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching initial data:', error);
-        setError('Failed to load initial data');
-        setLoading(false);
-      }
-    };
-
-    fetchInitialData();
-  }, []);
-
-  useEffect(() => {
-    if (selectedStore) {
-      fetchInventory();
-    }
-  }, [selectedStore]);
-
-  const fetchInventory = async () => {
+  const loadInitial = async () => {
+    setLoading(true);
     try {
-      const inventoryList = await window.api.inventory.get(selectedStore);
-      setInventory(inventoryList);
-    } catch (error) {
-      console.error('Error fetching inventory:', error);
-      setError('Failed to load inventory data');
-    }
+      const [s, p] = await Promise.all([storeService.list(), productService.list()]);
+      setStores(s); setProducts(p);
+      if (s[0]) setSelectedStore(s[0].id);
+    } catch (e) { setError(e.message); } finally { setLoading(false); }
   };
+  useEffect(() => { loadInitial(); }, []);
 
-  const handleStoreChange = (event) => {
-    setSelectedStore(event.target.value);
+  const loadInventory = async () => {
+    if (!selectedStore) return;
+    try { setInventory(await inventoryService.list(selectedStore)); } catch (e) { setError(e.message); }
   };
+  useEffect(() => { loadInventory(); }, [selectedStore]);
 
-  const handleOpenDialog = (item = null) => {
-    if (item) {
-      setEditingItem(item);
-      setFormData({
-        productId: item.product_id,
-        quantity: item.quantity,
-        minQuantity: item.min_quantity,
-        maxQuantity: item.max_quantity,
-      });
-    } else {
-      setEditingItem(null);
-      setFormData({
-        productId: '',
-        quantity: '',
-        minQuantity: '',
-        maxQuantity: '',
-      });
-    }
-    setOpenDialog(true);
+  const openDialog = (item = null) => {
+    setEditing(item);
+    setForm(item
+      ? { productId: item.productId, quantity: item.quantity, minQuantity: item.minQuantity, maxQuantity: item.maxQuantity }
+      : { productId: '', quantity: '', minQuantity: '', maxQuantity: '' });
+    setOpen(true);
   };
+  const close = () => { setOpen(false); setEditing(null); setForm({ productId: '', quantity: '', minQuantity: '', maxQuantity: '' }); };
 
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setEditingItem(null);
-    setFormData({
-      productId: '',
-      quantity: '',
-      minQuantity: '',
-      maxQuantity: '',
-    });
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleSubmit = async () => {
+  const submit = async () => {
     try {
       const data = {
         storeId: selectedStore,
-        productId: formData.productId,
-        quantity: parseInt(formData.quantity),
-        minQuantity: parseInt(formData.minQuantity),
-        maxQuantity: parseInt(formData.maxQuantity),
+        productId: form.productId,
+        quantity: parseInt(form.quantity, 10),
+        minQuantity: parseInt(form.minQuantity, 10),
+        maxQuantity: parseInt(form.maxQuantity, 10),
       };
-
-      if (editingItem) {
-        await window.api.inventory.update(data);
-      } else {
-        await window.api.inventory.add(data);
-      }
-
-      handleCloseDialog();
-      fetchInventory();
-    } catch (error) {
-      console.error('Error saving inventory item:', error);
-      setError('Failed to save inventory item');
-    }
+      await inventoryService.upsert(data);
+      close(); await loadInventory();
+    } catch (e) { setError(e.message); }
   };
 
-  const handleDeleteItem = async (storeId, productId) => {
-    if (window.confirm('Are you sure you want to remove this item from inventory?')) {
-      try {
-        await window.api.inventory.remove(storeId, productId);
-        fetchInventory();
-      } catch (error) {
-        console.error('Error deleting inventory item:', error);
-        setError('Failed to delete inventory item');
-      }
-    }
+  const remove = async (storeId, productId) => {
+    if (!window.confirm('Remove this item from inventory?')) return;
+    try { await inventoryService.remove(storeId, productId); await loadInventory(); } catch (e) { setError(e.message); }
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}><CircularProgress /></Box>;
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4">
-          Inventory Management
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel>Select Store</InputLabel>
-            <Select
-              value={selectedStore}
-              label="Select Store"
-              onChange={handleStoreChange}
-            >
-              {stores.map((store) => (
-                <MenuItem key={store.id} value={store.id}>
-                  {store.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-            disabled={!selectedStore}
-          >
-            Add Product
-          </Button>
-        </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h4">Inventory Management</Typography>
+        <FormControl sx={{ minWidth: 220 }}>
+          <InputLabel>Select Store</InputLabel>
+          <Select label="Select Store" value={selectedStore} onChange={(e) => setSelectedStore(e.target.value)}>
+            {stores.map((s) => <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>)}
+          </Select>
+        </FormControl>
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
-
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Product Name</TableCell>
+              <TableCell>Product</TableCell>
               <TableCell>Category</TableCell>
               <TableCell align="right">Quantity</TableCell>
-              <TableCell align="right">Min Quantity</TableCell>
-              <TableCell align="right">Max Quantity</TableCell>
+              <TableCell align="right">Min</TableCell>
+              <TableCell align="right">Max</TableCell>
               <TableCell align="right">Unit Price</TableCell>
               <TableCell align="center">Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {inventory.map((item) => {
-              const isLowStock = item.quantity <= item.min_quantity;
-              const isOverStock = item.quantity >= item.max_quantity;
-              
+            {inventory.map((i) => {
+              const low = i.quantity <= i.minQuantity;
+              const over = i.quantity >= i.maxQuantity;
               return (
-                <TableRow key={item.product_id}>
-                  <TableCell>{item.product_name}</TableCell>
-                  <TableCell>{item.category}</TableCell>
-                  <TableCell align="right">{item.quantity}</TableCell>
-                  <TableCell align="right">{item.min_quantity}</TableCell>
-                  <TableCell align="right">{item.max_quantity}</TableCell>
-                  <TableCell align="right">${item.unit_price.toFixed(2)}</TableCell>
+                <TableRow key={i.productId}>
+                  <TableCell>{i.productName}</TableCell>
+                  <TableCell>{i.category}</TableCell>
+                  <TableCell align="right">{i.quantity}</TableCell>
+                  <TableCell align="right">{i.minQuantity}</TableCell>
+                  <TableCell align="right">{i.maxQuantity}</TableCell>
+                  <TableCell align="right">${Number(i.unitPrice).toFixed(2)}</TableCell>
                   <TableCell align="center">
-                    {isLowStock && (
-                      <WarningIcon color="error" titleAccess="Low Stock" />
-                    )}
-                    {isOverStock && (
-                      <WarningIcon color="warning" titleAccess="Over Stock" />
-                    )}
+                    <Stack direction="row" justifyContent="center">
+                      {low && <WarningIcon color="error" titleAccess="Low Stock" />}
+                      {over && <WarningIcon color="warning" titleAccess="Over Stock" />}
+                    </Stack>
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton onClick={() => handleOpenDialog(item)} size="small">
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton 
-                      onClick={() => handleDeleteItem(selectedStore, item.product_id)} 
-                      size="small" 
-                      color="error"
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                    <IconButton onClick={() => openDialog(i)} size="small"><EditIcon /></IconButton>
+                    <IconButton onClick={() => remove(i.storeId, i.productId)} size="small" color="error"><DeleteIcon /></IconButton>
                   </TableCell>
                 </TableRow>
               );
@@ -266,66 +118,24 @@ const Inventory = () => {
           </TableBody>
         </Table>
       </TableContainer>
-
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingItem ? 'Edit Inventory Item' : 'Add New Inventory Item'}
-        </DialogTitle>
+      <Dialog open={open} onClose={close} maxWidth="sm" fullWidth>
+        <DialogTitle>{editing ? 'Edit Inventory' : 'Add Inventory'}</DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 2 }}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Product</InputLabel>
-              <Select
-                name="productId"
-                value={formData.productId}
-                onChange={handleInputChange}
-                label="Product"
-              >
-                {products.map((product) => (
-                  <MenuItem key={product.id} value={product.id}>
-                    {product.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              fullWidth
-              label="Quantity"
-              name="quantity"
-              type="number"
-              value={formData.quantity}
-              onChange={handleInputChange}
-              margin="normal"
-            />
-            <TextField
-              fullWidth
-              label="Minimum Quantity"
-              name="minQuantity"
-              type="number"
-              value={formData.minQuantity}
-              onChange={handleInputChange}
-              margin="normal"
-            />
-            <TextField
-              fullWidth
-              label="Maximum Quantity"
-              name="maxQuantity"
-              type="number"
-              value={formData.maxQuantity}
-              onChange={handleInputChange}
-              margin="normal"
-            />
-          </Box>
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Product</InputLabel>
+            <Select label="Product" name="productId" value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })} disabled={!!editing}>
+              {products.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
+            </Select>
+          </FormControl>
+          <TextField fullWidth margin="normal" label="Quantity" type="number" name="quantity" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
+          <TextField fullWidth margin="normal" label="Minimum Quantity" type="number" name="minQuantity" value={form.minQuantity} onChange={(e) => setForm({ ...form, minQuantity: e.target.value })} />
+          <TextField fullWidth margin="normal" label="Maximum Quantity" type="number" name="maxQuantity" value={form.maxQuantity} onChange={(e) => setForm({ ...form, maxQuantity: e.target.value })} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSubmit} variant="contained">
-            {editingItem ? 'Update' : 'Add'}
-          </Button>
+          <Button onClick={close}>Cancel</Button>
+          <Button onClick={submit} variant="contained">{editing ? 'Update' : 'Add'}</Button>
         </DialogActions>
       </Dialog>
     </Box>
   );
-};
-
-export default Inventory; 
+}

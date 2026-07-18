@@ -4,35 +4,26 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  base: './',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@components': path.resolve(__dirname, './src/components'),
-      '@features': path.resolve(__dirname, './src/features'),
     },
   },
   server: {
     port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-        secure: false,
-      },
-    },
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
     emptyOutDir: true,
-    sourcemap: true,
-    minify: 'terser',
     rollupOptions: {
       output: {
         manualChunks: {
-          react: ['react', 'react-dom'],
-          vendor: ['lodash', 'moment'],
+          react: ['react', 'react-dom', 'react-router-dom'],
           material: ['@mui/material', '@mui/icons-material'],
+          charts: ['recharts'],
         },
       },
     },
@@ -40,4 +31,4 @@ export default defineConfig({
   optimizeDeps: {
     include: ['@emotion/react', '@emotion/styled', '@mui/material'],
   },
-}); 
+});
