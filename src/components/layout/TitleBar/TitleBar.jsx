@@ -9,6 +9,9 @@ import CropSquareIcon from '@mui/icons-material/CropSquare';
 import CloseIcon from '@mui/icons-material/Close';
 import WebAssetIcon from '@mui/icons-material/WebAsset';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import Brightness4Icon from '@mui/icons-material/Brightness4';
+import Brightness7Icon from '@mui/icons-material/Brightness7';
+import { useThemeMode } from '../../../App';
 
 const TitleBarContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
@@ -40,23 +43,26 @@ const MenuArea = styled(Box)({
 
 const TitleBar = () => {
   const [isMaximized, setIsMaximized] = useState(false);
+  const themeMode = useThemeMode();
 
   useEffect(() => {
-    // Listen for window state changes
-    window.api.window.onMaximized(() => setIsMaximized(true));
-    window.api.window.onUnmaximized(() => setIsMaximized(false));
+    // Listen for window state changes (guard: bridge may be absent in tests/edge cases)
+    if (window.api?.window) {
+      window.api.window.onMaximized(() => setIsMaximized(true));
+      window.api.window.onUnmaximized(() => setIsMaximized(false));
+    }
   }, []);
 
   const handleMinimize = () => {
-    window.api.window.minimize();
+    window.api?.window?.minimize();
   };
 
   const handleMaximize = () => {
-    window.api.window.maximize();
+    window.api?.window?.maximize();
   };
 
   const handleClose = () => {
-    window.api.window.close();
+    window.api?.window?.close();
   };
 
   return (
@@ -67,6 +73,19 @@ const TitleBar = () => {
       </MenuArea>
       
       <WindowControls>
+        <Tooltip title={themeMode?.mode === 'dark' ? 'Light mode' : 'Dark mode'}>
+          <IconButton
+            onClick={() => themeMode?.toggleTheme()}
+            size="small"
+          >
+            {themeMode?.mode === 'dark' ? (
+              <Brightness7Icon fontSize="small" />
+            ) : (
+              <Brightness4Icon fontSize="small" />
+            )}
+          </IconButton>
+        </Tooltip>
+
         <Tooltip title="Minimize">
           <IconButton onClick={handleMinimize} size="small">
             <MinimizeIcon fontSize="small" />

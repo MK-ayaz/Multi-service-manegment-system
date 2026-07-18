@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -16,27 +16,45 @@ import {
   TextField,
   Button,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 
-const Settings = () => {
-  const [settings, setSettings] = useState({
-    darkMode: false,
-    notifications: true,
-    autoBackup: true,
-    language: 'en',
-    currency: 'USD',
-    dateFormat: 'MM/DD/YYYY',
-    backupLocation: 'C:/backups',
-  });
+const DEFAULT_SETTINGS = {
+  darkMode: false,
+  notifications: true,
+  autoBackup: true,
+  language: 'en',
+  currency: 'USD',
+  dateFormat: 'MM/DD/YYYY',
+  backupLocation: 'C:/backups',
+};
 
+const Settings = () => {
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  useEffect(() => {
+    if (window.api?.settings?.get) {
+      window.api.settings
+        .get()
+        .then((saved) => setSettings({ ...DEFAULT_SETTINGS, ...(saved || {}) }))
+        .catch(() => {})
+        .finally(() => setLoaded(true));
+    } else {
+      setLoaded(true);
+    }
+  }, []);
+
   const handleToggle = (setting) => {
-    setSettings(prev => ({
-      ...prev,
-      [setting]: !prev[setting],
-    }));
+    setSettings(prev => {
+      const next = { ...prev, [setting]: !prev[setting] };
+      if (setting === 'darkMode' && typeof window !== 'undefined') {
+        window.api?.theme?.set(next.darkMode ? 'dark' : 'light');
+      }
+      return next;
+    });
   };
 
   const handleChange = (setting, value) => {
@@ -57,6 +75,14 @@ const Settings = () => {
       setError('Failed to save settings');
     }
   };
+
+  if (!loaded) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box>

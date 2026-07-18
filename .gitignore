@@ -1,0 +1,27 @@
+node_modules/
+dist/
+build/
+out/
+coverage/
+
+# Electron build output
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.zip
+*.asar
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Env
+.env
+.env.*

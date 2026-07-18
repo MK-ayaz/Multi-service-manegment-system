@@ -50,29 +50,18 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        // Fetch stores count
-        const stores = await window.api.stores.getAll();
-        
-        // Fetch total products (sum of all store inventories)
-        const inventoryQuery = 'SELECT SUM(quantity) as total FROM inventory';
-        const [inventoryResult] = await window.api.db.query(inventoryQuery);
-        
-        // Fetch total sales for today
-        const today = new Date().toISOString().split('T')[0];
-        const salesQuery = `
-          SELECT COUNT(*) as count, SUM(total_amount) as total 
-          FROM sales 
-          WHERE date(created_at) = date('${today}')
-        `;
-        const [salesResult] = await window.api.db.query(salesQuery);
+        const [stores, stats] = await Promise.all([
+          window.api.stores.getAll(),
+          window.api.dashboard.stats(),
+        ]);
 
         setStats({
           totalStores: stores.length,
-          totalProducts: inventoryResult?.total || 0,
-          totalSales: salesResult?.count || 0,
-          revenue: salesResult?.total || 0,
+          totalProducts: stats.totalProducts,
+          totalSales: stats.totalSales,
+          revenue: stats.revenue,
         });
-        
+
         setLoading(false);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);

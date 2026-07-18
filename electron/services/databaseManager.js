@@ -5,32 +5,39 @@ const fs = require('fs').promises;
 class DatabaseManager {
   constructor() {
     this.db = null;
-    this.dbPath = path.join(process.env.APPDATA || process.env.HOME, 'MultiStoreManagement/database.sqlite');
+    this.dbPath = null;
   }
 
-  async initialize() {
+  async initialize(customPath) {
+    this.dbPath =
+      customPath ||
+      path.join(
+        process.env.APPDATA || process.env.HOME,
+        'MultiStoreManagement/database.sqlite'
+      );
+
     try {
       await fs.mkdir(path.dirname(this.dbPath), { recursive: true });
-      
-      return new Promise((resolve, reject) => {
-        this.db = new sqlite3.Database(this.dbPath, async (err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-
-          try {
-            await this.createTables();
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        });
-      });
     } catch (error) {
-      console.error('Error initializing database:', error);
+      console.error('Error creating database directory:', error);
       throw error;
     }
+
+    return new Promise((resolve, reject) => {
+      this.db = new sqlite3.Database(this.dbPath, async (err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        try {
+          await this.createTables();
+          await this.migrate();
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
   }
 
   async createTables() {
@@ -69,6 +76,7 @@ class DatabaseManager {
         customer_id INTEGER,
         total_amount REAL,
         payment_method TEXT,
+        status TEXT DEFAULT 'completed',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (store_id) REFERENCES stores(id)
       )`,
@@ -91,7 +99,11 @@ class DatabaseManager {
         address TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`
+      )`,
+      `CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )`,
     ];
 
     for (const table of tables) {
@@ -99,14 +111,30 @@ class DatabaseManager {
     }
   }
 
+  async migrate() {
+    const migrations = [
+      `ALTER TABLE sales ADD COLUMN status TEXT DEFAULT 'completed'`,
+    ];
+
+    for (const migration of migrations) {
+      try {
+        await this.run(migration);
+      } catch (error) {
+        if (!/duplicate column/i.test(error.message)) {
+          throw error;
+        }
+      }
+    }
+  }
+
   run(sql, params = []) {
     return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function(err) {
+      this.db.run(sql, params, function (err) {
         if (err) {
           reject(err);
           return;
         }
-        resolve(this);
+        resolve({ lastID: this.lastID, changes: this.changes });
       });
     });
   }
@@ -135,6 +163,18 @@ class DatabaseManager {
     });
   }
 
+  async withTransaction(fn) {
+    await this.run('BEGIN TRANSACTION');
+    try {
+      const result = await fn();
+      await this.run('COMMIT');
+      return result;
+    } catch (error) {
+      await this.run('ROLLBACK');
+      throw error;
+    }
+  }
+
   async close() {
     if (this.db) {
       return new Promise((resolve, reject) => {
@@ -151,4 +191,5 @@ class DatabaseManager {
   }
 }
 
-module.exports = new DatabaseManager(); 
+module.exports = new DatabaseManager();
+module.exports.DatabaseManager = DatabaseManager;
