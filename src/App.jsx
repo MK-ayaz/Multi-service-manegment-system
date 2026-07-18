@@ -1,10 +1,12 @@
 import React from 'react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
+import { CssBaseline } from '@mui/material';
+import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import MainLayout from './components/layout/MainLayout/MainLayout';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 
-// Import pages
+import Login from './pages/Login/Login';
+import AppShell from './components/AppShell/AppShell';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Stores from './pages/Stores/Stores';
 import Inventory from './pages/Inventory/Inventory';
@@ -13,53 +15,54 @@ import Customers from './pages/Customers/Customers';
 import Reports from './pages/Reports/Reports';
 import Settings from './pages/Settings/Settings';
 
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-    background: {
-      default: '#f5f5f5',
-      paper: '#ffffff',
-    },
-  },
-  components: {
-    MuiCssBaseline: {
-      styleOverrides: {
-        body: {
-          margin: 0,
-          padding: 0,
-          overflow: 'hidden',
-        }
-      }
-    }
-  }
-});
+function Protected({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return children;
+}
 
-function App() {
+function AppRoutes() {
+  const { isAuthenticated } = useAuth();
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <MainLayout>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/stores" element={<Stores />} />
-            <Route path="/inventory" element={<Inventory />} />
-            <Route path="/sales" element={<Sales />} />
-            <Route path="/customers" element={<Customers />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </MainLayout>
-      </Router>
-    </ThemeProvider>
+    <Routes>
+      <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route
+        path="/*"
+        element={
+          <Protected>
+            <AppShell>
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/stores" element={<Stores />} />
+                <Route path="/inventory" element={<Inventory />} />
+                <Route path="/sales" element={<Sales />} />
+                <Route path="/customers" element={<Customers />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </AppShell>
+          </Protected>
+        }
+      />
+    </Routes>
   );
 }
 
-export default App; 
+export default function App() {
+  return (
+    <AuthProvider>
+      <ThemeProvider>
+        {(theme) => (
+          <MuiThemeProvider theme={theme}>
+            <CssBaseline />
+            <Router>
+              <AppRoutes />
+            </Router>
+          </MuiThemeProvider>
+        )}
+      </ThemeProvider>
+    </AuthProvider>
+  );
+}

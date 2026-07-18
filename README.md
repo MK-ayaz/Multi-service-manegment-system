@@ -1,146 +1,53 @@
-# Multi-Store Management System
+# Multi-Store Management System (SaaS Desktop App)
 
-A comprehensive desktop application built with Electron and React for managing multiple stores, including medical pharmacies and retail stores. The system provides a robust platform for inventory management, sales tracking, and store operations with a modern, user-friendly interface.
+An Electron + React (Vite) desktop application for managing multiple stores — pharmacies and retail — built with a **production-oriented, multi-tenant SaaS architecture** that runs **fully locally on mock data** (no external backend required).
 
-## Core Features
+## Features
 
-### 1. Store Management
-- Multi-store support with individual configurations
-- Store-specific settings and preferences
-- Location management and mapping
-- Performance analytics and reporting
+- **Authentication & multi-tenancy** — login, session, and tenant (organization) switching. All data is scoped per tenant.
+- **Dashboard** — KPI cards plus revenue trend (area chart) and sales-by-store (bar chart) using Recharts.
+- **Stores / Inventory / Sales (POS) / Customers / Reports / Settings** — full CRUD with tenant scoping.
+- **Point of Sale** — add-to-cart, quantity adjustments, payment method, checkout that decrements inventory, and sale voiding (with double-void guard + inventory restoration).
+- **Theming** — light/dark mode persisted per workspace.
+- **Local mock backend** — an in-memory, async, tenant-scoped data store that simulates a real API. Swap `src/services/mock/db.js` for HTTP calls in `src/services/api.js` to go live.
 
-### 2. Inventory Management
-- Real-time stock tracking
-- Batch and expiry management for medical stores
-- Automated reorder points and notifications
-- Inventory valuation and reporting
-- Barcode scanning support
-- Stock transfer between stores
+## Architecture
 
-### 3. Sales and POS
-- Modern Point of Sale interface
-- Multiple payment method support
-- Receipt generation and printing
-- Sales history and analytics
-- Customer order management
-- Discount and promotion handling
+```
+Electron (main.js + preload.js)
+  └─ loads the React renderer (Vite build → dist/)
 
-### 4. Customer Management
-- Customer profiles and history
-- Loyalty program integration
-- Prescription management for pharmacies
-- Customer segmentation
-- Marketing campaign management
+Renderer (React + MUI)
+  ├─ context/AuthContext     auth + tenant context
+  ├─ context/ThemeContext    light/dark
+  ├─ services/api.js         service layer (single swap point to real API)
+  ├─ services/mock/db.js     in-memory tenant-scoped mock database
+  ├─ components/AppShell     sidebar + topbar (tenant switcher, theme, user)
+  └─ pages/                  Login, Dashboard, Stores, Inventory, Sales, Customers, Reports, Settings
+```
 
-### 5. Reporting and Analytics
-- Real-time sales dashboards
-- Inventory analytics
-- Financial reporting
-- Customer insights
-- Export capabilities (PDF, Excel)
+**Key design point:** the UI never talks to data directly — it calls `services/api.js`. Today that delegates to the local mock store; replacing the implementation with `fetch`/axios calls is the only change needed to connect a real backend.
 
-### 6. Security and Access Control
-- Role-based access control
-- User activity logging
-- Secure data encryption
-- Regular backup systems
+## Demo Accounts
 
-## Technical Architecture
+| Email | Password | Tenant |
+|-------|----------|--------|
+| admin@acme.com | admin123 | Acme Retail Group |
+| manager@healthplus.com | manager123 | HealthPlus Pharmacies |
+| demo@demo.com | demo123 | Acme Retail Group |
 
-### Frontend
-- React with Material-UI
-- Context API for state management
-- React Router for navigation
-- Chart.js for analytics visualization
+## Getting Started
 
-### Backend (Electron)
-- SQLite for local database
-- IPC communication
-- File system management
-- Process management
-- Printer integration
+```bash
+npm install
+npm run dev            # Vite dev server + Electron (loads http://localhost:3000)
+# or
+npm run build          # production build → dist/
+npm run electron:build # package with electron-builder
+npm test               # run the test suite (mock data layer)
+```
 
-### Data Storage
-- Local SQLite database
-- File-based storage for documents
-- Automatic backup system
+## Notes
 
-## Coming Features
-
-### 1. Cloud Integration
-- Cloud backup and sync
-- Multi-device support
-- Real-time data synchronization
-- Remote access capabilities
-
-### 2. Advanced Analytics
-- AI-powered sales predictions
-- Inventory optimization
-- Customer behavior analysis
-- Automated reporting
-
-### 3. E-commerce Integration
-- Online store integration
-- Order management system
-- Delivery tracking
-- Multi-channel inventory sync
-
-### 4. Mobile Applications
-- Mobile POS system
-- Inventory management app
-- Customer mobile app
-- Push notifications
-
-### 5. Advanced Security
-- Biometric authentication
-- End-to-end encryption
-- Advanced audit trails
-- Compliance reporting
-
-## Setup and Installation
-
-### Prerequisites
-- Node.js (v14 or higher)
-- npm or yarn
-- Git
-
-### Development Setup
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/multi-store-management.git
-   cd multi-store-management
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start development server:
-   ```bash
-   npm run dev
-   ```
-
-### Building for Production
-1. Build the application:
-   ```bash
-   npm run build
-   ```
-
-2. Create executable:
-   ```bash
-   npm run electron:build
-   ```
-
-## Contributing
-
-We welcome contributions! Please read our contributing guidelines before submitting pull requests.
-
-## License
-
-This project is licensed under the ISC License.
-
-## Support
-
-For support, please open an issue in the GitHub repository or contact our support team. 
+- Data is in-memory and resets on app restart (this is the local mock backend by design).
+- To make data persistent or multi-user, implement the backend behind `services/api.js`.
